@@ -2,7 +2,9 @@
 
 namespace SimpleSAML\Module\authlinkedin\Auth\Source;
 
-use Webmozart\Assert\Assert;
+use SimpleSAML\Auth;
+use SimpleSAML\Logger;
+use SimpleSAML\Module\oauth\Consumer;
 
 $default = dirname(dirname(dirname(dirname(dirname(__FILE__))))).'/oauth/libextinc/OAuth.php';
 $travis = dirname(dirname(dirname(dirname(__FILE__)))).'/vendor/simplesamlphp/simplesamlphp/modules/oauth/libextinc/OAuth.php';
@@ -22,7 +24,7 @@ if (file_exists($default)) {
  * @package SimpleSAMLphp
  */
 
-class LinkedIn extends \SimpleSAML\Auth\Source
+class LinkedIn extends Auth\Source
 {
     /**
      * The string used to identify our states.
@@ -51,11 +53,8 @@ class LinkedIn extends \SimpleSAML\Auth\Source
      * @param array $config  Configuration.
      * @throws \Exception
      */
-    public function __construct($info, $config)
+    public function __construct(array $info, array $config)
     {
-        Assert::isArray($info);
-        Assert::isArray($config);
-
         // Call the parent constructor first, as required by the interface
         parent::__construct($info, $config);
 
@@ -87,15 +86,13 @@ class LinkedIn extends \SimpleSAML\Auth\Source
      * @param array &$state  Information about the current authentication.
      * @return void
      */
-    public function authenticate(&$state)
+    public function authenticate(array &$state): void
     {
-        Assert::isArray($state);
-
         // We are going to need the authId in order to retrieve this authentication source later
         $state[self::AUTHID] = $this->authId;
 
-        $stateID = \SimpleSAML\Auth\State::getStateId($state);
-        \SimpleSAML\Logger::debug('authlinkedin auth state id = '.$stateID);
+        $stateID = Auth\State::getStateId($state);
+        Logger::debug('authlinkedin auth state id = '.$stateID);
 
         $consumer = new \SimpleSAML\Module\oauth\Consumer($this->key, $this->secret);
 
@@ -107,7 +104,7 @@ class LinkedIn extends \SimpleSAML\Auth\Source
             ]
         );
 
-        \SimpleSAML\Logger::debug(
+        Logger::debug(
             "Got a request token from the OAuth service provider [".
             $requestToken->key."] with the secret [".$requestToken->secret."]"
         );
@@ -115,7 +112,7 @@ class LinkedIn extends \SimpleSAML\Auth\Source
         $state['authlinkedin:requestToken'] = $requestToken;
 
         // Update the state
-        \SimpleSAML\Auth\State::saveState($state, self::STAGE_INIT);
+        Auth\State::saveState($state, self::STAGE_INIT);
 
         // Authorize the request token
         $consumer->getAuthorizeRequest('https://www.linkedin.com/uas/oauth/authenticate', $requestToken);
@@ -127,13 +124,13 @@ class LinkedIn extends \SimpleSAML\Auth\Source
      * @return void
      * @throws \Exception
      */
-    public function finalStep(&$state)
+    public function finalStep(array &$state): void
     {
         $requestToken = $state['authlinkedin:requestToken'];
 
-        $consumer = new \SimpleSAML\Module\oauth\Consumer($this->key, $this->secret);
+        $consumer = new Consumer($this->key, $this->secret);
 
-        \SimpleSAML\Logger::debug(
+        Logger::debug(
             "oauth: Using this request token [".
             $requestToken->key."] with the secret [".$requestToken->secret."]"
         );
@@ -145,7 +142,7 @@ class LinkedIn extends \SimpleSAML\Auth\Source
             ['oauth_verifier' => $state['authlinkedin:oauth_verifier']]
         );
 
-        \SimpleSAML\Logger::debug(
+        Logger::debug(
             "Got an access token from the OAuth service provider [".
             $accessToken->key."] with the secret [".$accessToken->secret."]"
         );
@@ -168,10 +165,11 @@ class LinkedIn extends \SimpleSAML\Auth\Source
             $attributes['linkedin_user'] = [$userdata['id'].'@linkedin.com'];
         }
 
-        \SimpleSAML\Logger::debug('LinkedIn Returned Attributes: '.implode(", ", array_keys($attributes)));
+        Logger::debug('LinkedIn Returned Attributes: '.implode(", ", array_keys($attributes)));
 
         $state['Attributes'] = $attributes;
     }
+
 
     /**
      * takes an associative array, traverses it and returns the keys concatenated with a dot
@@ -200,7 +198,7 @@ class LinkedIn extends \SimpleSAML\Auth\Source
      *
      * @return array the array with the new concatenated keys
      */
-    protected function flatten($array, $prefix = '')
+    protected function flatten(array $array, string $prefix = ''): array
     {
         $result = [];
         foreach ($array as $key => $value) {
